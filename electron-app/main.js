@@ -1,0 +1,497 @@
+const { app, BrowserWindow, ipcMain, dialog, globalShortcut, Tray, Menu, nativeImage } = require('electron');
+const path = require('path');
+const { spawn } = require('child_process');
+const os = require('os');
+const fs = require('fs');
+
+let mainWindow;
+let ffmpegProcess = null;
+let chromeProcess = null;
+let isStreaming = false;
+let tray = null;
+
+function createWindow() {
+    mainWindow = new BrowserWindow({
+        width: 500,
+        height: 550,
+        minWidth: 450,
+        minHeight: 500,
+        alwaysOnTop: true,
+        resizable: true,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
+        },
+        title: 'Desk SRT - Screen Capture by Enzo Pellegrino',
+        autoHideMenuBar: true,
+        show: false  // Don't show until ready
+    });
+
+    mainWindow.loadFile('index.html');
+    
+    // Show window when ready to avoid flash
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
+    });
+    
+    // Hide menu bar completely
+    mainWindow.setMenuBarVisibility(false);
+    
+    // Position window outside capture area but visible (top-right corner)
+    const { screen } = require('electron');
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    
+    // Position the window in the top-right corner, fully visible
+    const windowX = width - 520;  // Leave some margin from right edge
+    const windowY = 20;           // Small margin from top
+    
+    mainWindow.setPosition(windowX, windowY);
+    
+    // Make sure window stays on top but not during capture
+    mainWindow.setAlwaysOnTop(true, 'floating', 1);
+}
+
+function createTray() {
+    // Create tray icon (we'll use a simple emoji for now)
+    const iconPath = path.join(__dirname, 'assets', 'tray-icon.png');
+    
+    // Create a simple tray icon if file doesn't exist
+    try {
+        if (!fs.existsSync(iconPath)) {
+            // Use the app icon or create a simple one
+            tray = new Tray(path.join(__dirname, 'assets', 'icon.ico'));
+        } else {
+            tray = new Tray(iconPath);
+        }
+    } catch (error) {
+        // Fallback: create tray without icon
+        tray = new Tray(nativeImage.createEmpty());
+    }
+    
+    // Create context menu for tray
+    const contextMenu = Menu.buildFromTemplate([
+        {
+            label: 'Show Desk SRT',
+            click: () => {
+                showMainWindow();
+            }
+        },
+        {
+            label: 'Hide Window',
+            click: () => {
+                mainWindow.hide();
+            }
+        },
+        { type: 'separator' },
+        {
+            label: 'Stream Status',
+            enabled: false
+        },
+        {
+            label: isStreaming ? '🔴 Streaming Active' : '⏹ Stream Stopped',
+            enabled: false
+        },
+        { type: 'separator' },
+        {
+            label: 'Quit Desk SRT',
+            click: () => {
+                app.quit();
+            }
+        }
+    ]);
+    
+    tray.setContextMenu(contextMenu);
+    tray.setToolTip('Desk SRT - Screen Capture');
+    
+    // Double click to show window
+    tray.on('double-click', () => {
+        showMainWindow();
+    });
+}
+
+function registerGlobalShortcuts() {
+    // Global shortcut to show/hide window: Ctrl+Shift+D
+    globalShortcut.register('CommandOrControl+Shift+D', () => {
+        if (mainWindow.isVisible()) {
+            mainWindow.hide();
+        } else {
+            showMainWindow();
+        }
+    });
+    
+    // Global shortcut to toggle streaming: Ctrl+Shift+S
+    globalShortcut.register('CommandOrControl+Shift+S', () => {
+        if (isStreaming) {
+            // Stop streaming
+            if (ffmpegProcess) {
+                ffmpegProcess.kill();
+                ffmpegProcess = null;
+            }
+            isStreaming = false;
+        } else {
+            // Quick start streaming with default settings
+            const defaultUrl = 'srt://direct-obs4.wyscout.com:10080';
+            // We could implement quick start here
+        }
+    });
+}
+
+function showMainWindow() {
+    if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+function updateTrayMenu() {
+    if (tray) {
+        const contextMenu = Menu.buildFromTemplate([
+            {
+                label: 'Show Desk SRT',
+                click: () => {
+                    showMainWindow();
+                }
+            },
+            {
+                label: 'Hide Window',
+                click: () => {
+                    mainWindow.hide();
+                }
+            },
+            { type: 'separator' },
+            {
+                label: 'Stream Status',
+                enabled: false
+            },
+            {
+                label: isStreaming ? '🔴 Streaming Active' : '⏹ Stream Stopped',
+                enabled: false
+            },
+            { type: 'separator' },
+            {
+                label: 'Quit Desk SRT',
+                click: () => {
+                    app.quit();
+                }
+            }
+        ]);
+        tray.setContextMenu(contextMenu);
+    }
+}
+
+app.whenReady().then(() => {
+    createWindow();
+    createTray();
+    registerGlobalShortcuts();
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        } else {
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+});
+
+app.on('before-quit', () => {
+    // Clean up processes before quitting
+    if (ffmpegProcess) {
+        ffmpegProcess.kill();
+    }
+    if (chromeProcess) {
+        chromeProcess.kill();
+    }
+    
+    // Unregister global shortcuts
+    globalShortcut.unregisterAll();
+});
+
+app.on('window-all-closed', () => {
+    // Don't quit on window close, keep running in tray
+    if (process.platform !== 'darwin') {
+        // On Windows/Linux, keep app running in tray
+        // Uncomment next line if you want to quit when window closes:
+        // app.quit();
+    }
+});
+
+// IPC handlers
+ipcMain.handle('start-streaming', async (event, srtUrl) => {
+    if (isStreaming) {
+        return { success: false, message: 'Stream already active' };
+    }
+
+    try {
+        // Check if on macOS - use demo mode for testing countdown
+        if (os.platform() === 'darwin') {
+            console.log('🍎 Running on macOS - Demo mode (countdown test)');
+            isStreaming = true;
+            
+            // Simulate successful stream start for testing
+            setTimeout(() => {
+                if (mainWindow) {
+                    mainWindow.webContents.send('streaming-status', { 
+                        streaming: true 
+                    });
+                }
+            }, 100);
+            
+            return { success: true, message: 'Demo mode - Stream simulated' };
+        }
+
+        // FFmpeg command optimized for EC2 g4.xlarge (NVIDIA T4) with window exclusion
+        const ffmpegArgs = [
+            // Video input - Windows screen capture with window exclusion
+            '-f', 'gdigrab',
+            '-framerate', '30',
+            '-video_size', '1920x1080',
+            '-show_region', '1',  // Show capture region (helps exclude our window)
+            '-i', 'desktop',
+            // Audio input - system audio capture
+            '-f', 'dshow',
+            '-i', 'audio="Stereo Mix"',
+            // Video filters to exclude our window (we'll position it outside capture area)
+            '-vf', 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2',
+            // Video encoding optimized for NVIDIA T4
+            '-c:v', 'h264_nvenc',
+            '-preset', 'p4',          // Preset optimized for T4
+            '-tune', 'ull',           // Ultra Low Latency for streaming
+            '-profile:v', 'high',
+            '-level', '4.1',
+            '-pix_fmt', 'yuv420p',
+            '-b:v', '4000k',          // Optimal bitrate for T4
+            '-maxrate', '5000k',
+            '-bufsize', '8000k',
+            '-g', '60',               // Optimized GOP
+            '-keyint_min', '30',
+            '-r', '30',
+            '-rc', 'cbr',             // Constant bitrate for streaming
+            // Audio encoding
+            '-c:a', 'aac',
+            '-b:a', '192k',           // Increased audio quality
+            '-ar', '48000',           // Professional sample rate
+            '-ac', '2',
+            // SRT specific optimizations
+            '-f', 'mpegts',
+            '-muxrate', '5000k',
+            srtUrl
+        ];
+
+        ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        ffmpegProcess.on('error', (error) => {
+            console.error('Errore FFmpeg:', error);
+            isStreaming = false;
+            mainWindow.webContents.send('streaming-status', { streaming: false, error: error.message });
+        });
+
+        ffmpegProcess.on('close', (code) => {
+            console.log(`FFmpeg terminato con codice ${code}`);
+            isStreaming = false;
+            mainWindow.webContents.send('streaming-status', { streaming: false });
+        });
+
+        isStreaming = true;
+        updateTrayMenu(); // Update tray menu to show streaming status
+        
+        // Hide window during streaming to avoid capture (optional)
+        // mainWindow.minimize(); // Uncomment to auto-minimize during stream
+        
+        return { success: true, message: 'Streaming started successfully' };
+    } catch (error) {
+        return { success: false, message: `Error: ${error.message}` };
+    }
+});
+
+ipcMain.handle('stop-streaming', async () => {
+    if (os.platform() === 'darwin') {
+        console.log('🍎 macOS Demo mode - Stopping simulated stream');
+        isStreaming = false;
+        updateTrayMenu(); // Update tray menu to show stopped status
+        
+        // Notify renderer that stream stopped
+        if (mainWindow) {
+            mainWindow.webContents.send('streaming-status', { 
+                streaming: false 
+            });
+        }
+        
+        return { success: true, message: 'Demo stream stopped' };
+    }
+    
+    if (ffmpegProcess) {
+        ffmpegProcess.kill();
+        ffmpegProcess = null;
+    }
+    isStreaming = false;
+    updateTrayMenu(); // Update tray menu to show stopped status
+    return { success: true, message: 'Stream stopped' };
+});
+
+ipcMain.handle('get-streaming-status', async () => {
+    return { streaming: isStreaming };
+});
+
+// Funzione per verificare la disponibilità dei browser
+function checkBrowserAvailability() {
+    const chromePaths = [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+    ];
+
+    for (const path of chromePaths) {
+        try {
+            if (fs.existsSync(path)) {
+                const browserName = path.includes('msedge') ? 'Edge' : 'Chrome';
+                console.log(`✅ ${browserName} disponibile: ${path}`);
+                return { available: true, path, name: browserName };
+            }
+        } catch (error) {
+            console.log(`❌ Controllo fallito: ${path}`);
+        }
+    }
+    
+    console.log('⚠️ Nessun browser trovato nei percorsi standard');
+    return { available: false, path: null, name: null };
+}
+
+ipcMain.handle('check-browser', async () => {
+    return checkBrowserAvailability();
+});
+
+// Chrome Kiosk handlers
+ipcMain.handle('start-chrome-kiosk', async () => {
+    if (chromeProcess) {
+        return { success: false, message: 'Chrome already running' };
+    }
+
+    try {
+        // Comando per avviare Chrome in modalità kiosk
+        const chromeArgs = [
+            '--kiosk',
+            '--disable-infobars',
+            '--disable-session-crashed-bubble',
+            '--disable-restore-session-state',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--start-fullscreen',
+            '--no-first-run',
+            '--disable-translate',
+            '--disable-default-apps',
+            '--disable-popup-blocking',
+            'about:blank'  // Pagina iniziale vuota
+        ];
+
+        // Cerca Chrome in percorsi comuni Windows + Edge come fallback
+        const chromePaths = [
+            // Chrome standard paths
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+            // Chrome in user directory
+            `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
+            `${process.env.APPDATA}\\..\\Local\\Google\\Chrome\\Application\\chrome.exe`,
+            // Chrome portable
+            'C:\\Chrome\\chrome.exe',
+            'D:\\Chrome\\chrome.exe',
+            // Edge come fallback (supporta modalità kiosk)
+            'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+            'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+            // Browser nel PATH
+            'chrome',
+            'msedge'
+        ];
+
+        let chromePath = null;
+        let browserName = 'Chrome';
+        const fs = require('fs');
+        
+        // Trova il primo browser disponibile
+        for (const path of chromePaths) {
+            try {
+                if (fs.existsSync(path)) {
+                    chromePath = path;
+                    if (path.includes('msedge')) {
+                        browserName = 'Edge';
+                    }
+                    console.log(`Trovato ${browserName} in: ${path}`);
+                    break;
+                }
+            } catch (error) {
+                console.log(`Controllo percorso fallito: ${path}`);
+            }
+        }
+
+        if (!chromePath) {
+            return { success: false, message: 'Chrome/Edge not found. Install Google Chrome or use Microsoft Edge.' };
+        }
+
+        chromeProcess = spawn(chromePath, chromeArgs, {
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        chromeProcess.on('error', (error) => {
+            console.error('Errore Chrome:', error);
+            chromeProcess = null;
+            mainWindow.webContents.send('chrome-status', { active: false, error: error.message });
+        });
+
+        chromeProcess.on('close', (code) => {
+            console.log(`Chrome terminato con codice ${code}`);
+            chromeProcess = null;
+            mainWindow.webContents.send('chrome-status', { active: false });
+        });
+
+        return { success: true, message: `${browserName} Kiosk started` };
+    } catch (error) {
+        return { success: false, message: `Error: ${error.message}` };
+    }
+});
+
+ipcMain.handle('exit-chrome-kiosk', async () => {
+    if (chromeProcess) {
+        chromeProcess.kill();
+        chromeProcess = null;
+        return { success: true, message: 'Chrome Kiosk terminated' };
+    }
+    return { success: false, message: 'Chrome not running' };
+});
+
+// Window visibility handlers
+ipcMain.handle('hide-window', async () => {
+    try {
+        mainWindow.hide(); // Use hide instead of minimize for better control
+        return { success: true, message: 'Window hidden (use Ctrl+Shift+D or tray to show)' };
+    } catch (error) {
+        return { success: false, message: `Error: ${error.message}` };
+    }
+});
+
+ipcMain.handle('show-window', async () => {
+    try {
+        showMainWindow();
+        return { success: true, message: 'Window shown' };
+    } catch (error) {
+        return { success: false, message: `Error: ${error.message}` };
+    }
+});
+
+ipcMain.handle('get-platform', async () => {
+    return os.platform();
+});
+
+// Gestione errori non catturati
+process.on('uncaughtException', (error) => {
+    console.error('Errore non catturato:', error);
+    if (ffmpegProcess) {
+        ffmpegProcess.kill();
+    }
+});

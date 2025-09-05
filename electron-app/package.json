@@ -1,0 +1,64 @@
+{
+  "name": "desk-srt",
+  "productName": "Desk SRT",
+  "version": "2.1.0",
+  "main": "main.js",
+  "description": "Screen Capture to SRT Streaming Application",
+  "author": "Enzo Pellegrino",
+  "license": "MIT",
+  "homepage": "https://github.com/enzopellegrino/desk-srt",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "dist": "npm run build",
+    "pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.enzopellegrino.desk-srt",
+    "productName": "Desk SRT",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "renderer.js",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "${productName}_Setup_${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Desk SRT"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility"
+    }
+  },
+  "keywords": [
+    "electron",
+    "desktop",
+    "screen-capture",
+    "srt",
+    "streaming",
+    "ffmpeg"
+  ],
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12"
+  }
+}

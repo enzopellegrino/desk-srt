@@ -104,6 +104,7 @@ Section "Desk SRT Core (Richiesto)" SecCore
     File "LICENSE.txt"
     File "start.bat"
     File "setup.bat"
+    File "debug.bat"
     
     ; Configuration
     SetOutPath "$INSTDIR\config"
@@ -241,16 +242,19 @@ SectionEnd
 
 Section "Collegamenti Desktop" SecDesktop
     DetailPrint "Creazione collegamenti desktop..."
-    CreateShortCut "$DESKTOP\Desk SRT.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\desk_srt.py" 0 SW_SHOWNORMAL
-    CreateShortCut "$DESKTOP\Configurazione Desk SRT.lnk" "$APPDATA\DeskSRT\user_settings.ini"
+    CreateShortCut "$DESKTOP\Desk SRT.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\desk_srt.py" 0 SW_SHOWNORMAL "" "Avvia Desk SRT - Screen Capture to SRT Streamer"
+    CreateShortCut "$DESKTOP\Configurazione Desk SRT.lnk" "notepad.exe" "$APPDATA\DeskSRT\user_settings.ini" "" 0 SW_SHOWNORMAL "" "Configura Desk SRT"
 SectionEnd
 
 Section "Menu Start" SecStartMenu
     DetailPrint "Creazione menu Start..."
     CreateDirectory "$SMPROGRAMS\Desk SRT"
-    CreateShortCut "$SMPROGRAMS\Desk SRT\Desk SRT.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\desk_srt.py" 0
-    CreateShortCut "$SMPROGRAMS\Desk SRT\Configurazione.lnk" "$APPDATA\DeskSRT\user_settings.ini"
+    CreateShortCut "$SMPROGRAMS\Desk SRT\Desk SRT.lnk" "$INSTDIR\start.bat" "" "$INSTDIR\desk_srt.py" 0 SW_SHOWNORMAL "" "Avvia Desk SRT"
+    CreateShortCut "$SMPROGRAMS\Desk SRT\Configurazione.lnk" "notepad.exe" "$APPDATA\DeskSRT\user_settings.ini" "" 0 SW_SHOWNORMAL "" "Modifica configurazione"
+    CreateShortCut "$SMPROGRAMS\Desk SRT\Configurazione Sistema.lnk" "notepad.exe" "$INSTDIR\config\settings.ini" "" 0 SW_SHOWNORMAL "" "Configurazione sistema"
+    CreateShortCut "$SMPROGRAMS\Desk SRT\Diagnostica.lnk" "$INSTDIR\debug.bat" "" "" 0 SW_SHOWNORMAL "" "Diagnostica problemi"
     CreateShortCut "$SMPROGRAMS\Desk SRT\Documentazione.lnk" "$INSTDIR\README.md"
+    CreateShortCut "$SMPROGRAMS\Desk SRT\Cartella Installazione.lnk" "explorer.exe" "$INSTDIR" "" 0 SW_SHOWNORMAL "" "Apri cartella installazione"
     CreateShortCut "$SMPROGRAMS\Desk SRT\Progetto GitHub.lnk" "https://github.com/enzopellegrino/desk-srt"
     CreateShortCut "$SMPROGRAMS\Desk SRT\Disinstalla.lnk" "$INSTDIR\Uninstall.exe"
 SectionEnd
@@ -282,6 +286,7 @@ Section "Uninstall"
     Delete "$INSTDIR\LICENSE.txt"
     Delete "$INSTDIR\start.bat"
     Delete "$INSTDIR\setup.bat"
+    Delete "$INSTDIR\debug.bat"
     Delete "$INSTDIR\install_python.bat"
     Delete "$INSTDIR\install_ffmpeg.bat"
     Delete "$INSTDIR\ffmpeg.exe"

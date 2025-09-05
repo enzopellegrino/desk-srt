@@ -18,6 +18,20 @@ lib/
 lib64/
 parts/
 sdist/
+
+# Electron build files
+electron-app/dist/
+electron-app/build/
+electron-app/node_modules/
+electron-app/out/
+*.exe
+*.msi
+*.dmg
+*.AppImage
+*.snap
+*.deb
+*.rpm
+*.tar.gz
 var/
 wheels/
 pip-wheel-metadata/
