@@ -1,0 +1,17 @@
+# Desk SRT - Screen Capture to SRT Streaming Application
+# Requirements for Windows Server 2022
+
+# Core dependencies
+psutil>=5.9.0
+configparser>=5.3.0
+
+# Optional: For advanced GUI features
+pillow>=9.0.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# black>=22.0.0
+
+# Note: FFmpeg with NVENC support required separately
+# Download from: https://ffmpeg.org/download.html#build-windows
+# Ensure ffmpeg.exe is in PATH or place in project directory
