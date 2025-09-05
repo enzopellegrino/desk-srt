@@ -3,6 +3,20 @@ let chromeKioskActive = false;
 let windowHidden = false;
 let countdownInterval = null;
 
+// Helper function to adjust window size with delay
+function adjustWindowSizeDelayed() {
+    // Wait a bit for DOM changes to complete
+    setTimeout(async () => {
+        try {
+            if (window.electronAPI.adjustWindowSize) {
+                await window.electronAPI.adjustWindowSize();
+            }
+        } catch (error) {
+            console.log('Window resize not available:', error);
+        }
+    }, 100);
+}
+
 async function startStreaming() {
     const srtUrl = document.getElementById('srtUrl').value.trim();
     
@@ -126,6 +140,9 @@ function updateStatus(message, type) {
     const statusElement = document.getElementById('status');
     statusElement.textContent = message;
     statusElement.className = `status ${type}`;
+    
+    // Adjust window size when status changes
+    adjustWindowSizeDelayed();
 }
 
 function updateButtons(canStart) {
@@ -199,7 +216,7 @@ async function toggleChromeKiosk() {
                 chromeBtn.textContent = `🌐 Exit ${browserName} Kiosk`;
                 chromeBtn.className = 'btn-chrome kiosk-active';
             } else {
-                updateStatus(`❌ Chrome: ${result.message}`, 'stopped');
+                updateStatus(`❌ Chrome: ${result.message}`, 'error');
             }
         } else {
             // Exit kiosk mode
@@ -211,7 +228,16 @@ async function toggleChromeKiosk() {
             }
         }
     } catch (error) {
-        updateStatus(`❌ Chrome Error: ${error.message}`, 'stopped');
+        updateStatus(`❌ Chrome Error: ${error.message}`, 'error');
+    }
+}
+
+async function openFFmpegDownload() {
+    try {
+        await window.electronAPI.openExternal?.('https://ffmpeg.org/download.html#build-windows');
+    } catch (error) {
+        console.error('Failed to open FFmpeg download:', error);
+        updateStatus('💡 Visit: https://ffmpeg.org/download.html#build-windows', 'error');
     }
 }
 
@@ -238,6 +264,48 @@ window.addEventListener('DOMContentLoaded', async () => {
         const platform = await window.electronAPI.getPlatform?.() || 'unknown';
         if (platform === 'darwin') {
             updateStatus('🍎 Demo Mode - Test countdown functionality', 'stopped');
+            // Show demo mode banner
+            const demoBanner = document.getElementById('demoModeBanner');
+            if (demoBanner) {
+                demoBanner.style.display = 'block';
+                // Adjust window size after showing banner
+                adjustWindowSizeDelayed();
+            }
+        }
+        
+        // Check FFmpeg availability on Windows
+        if (platform === 'win32') {
+            try {
+                const ffmpegCheck = await window.electronAPI.checkFFmpeg?.();
+                if (!ffmpegCheck?.available) {
+                    updateStatus('❌ FFmpeg not installed - Streaming unavailable', 'error');
+                    // Disable start button until FFmpeg is installed
+                    const startBtn = document.getElementById('startBtn');
+                    startBtn.disabled = true;
+                    startBtn.textContent = '❌ Install FFmpeg First';
+                    startBtn.title = 'Download from https://ffmpeg.org/download.html#build-windows';
+                    
+                    // Show FFmpeg helper button
+                    const ffmpegHelper = document.getElementById('ffmpegHelper');
+                    ffmpegHelper.style.display = 'block';
+                    
+                    // Show installation instructions
+                    setTimeout(() => {
+                        updateStatus('📥 Click button below to download FFmpeg', 'error');
+                        // Adjust window size after content change
+                        adjustWindowSizeDelayed();
+                    }, 3000);
+                    
+                    // Adjust window size after showing error content
+                    adjustWindowSizeDelayed();
+                    return;
+                } else {
+                    updateStatus('✅ FFmpeg ready - Select server and port to start streaming', 'stopped');
+                }
+            } catch (error) {
+                console.error('FFmpeg check failed:', error);
+                updateStatus('⚠️ Could not check FFmpeg status', 'error');
+            }
         }
         
         // Check streaming status
@@ -246,6 +314,12 @@ window.addEventListener('DOMContentLoaded', async () => {
             updateStatus('🔴 Stream active', 'streaming');
             updateButtons(false);
             isStreaming = true;
+        } else {
+            // Only update status if not on macOS demo mode
+            if (platform !== 'darwin') {
+                updateStatus('⏹ Ready to stream', 'stopped');
+            }
+            // Keep demo mode message visible on macOS
         }
         
         // Check browser availability
@@ -262,6 +336,14 @@ window.addEventListener('DOMContentLoaded', async () => {
             chromeBtn.disabled = true;
             chromeBtn.textContent = '❌ Browser not found';
             chromeBtn.style.opacity = '0.5';
+            chromeBtn.title = 'Please install Google Chrome or Microsoft Edge';
+            
+            // Show browser installation message after a delay
+            if (platform === 'win32') {
+                setTimeout(() => {
+                    updateStatus('💡 Install Chrome or Edge for kiosk mode', 'stopped');
+                }, 5000);
+            }
         }
     } catch (error) {
         console.error('Initial check error:', error);

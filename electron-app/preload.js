@@ -10,5 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkBrowser: () => ipcRenderer.invoke('check-browser'),
     hideWindow: () => ipcRenderer.invoke('hide-window'),
     showWindow: () => ipcRenderer.invoke('show-window'),
-    getPlatform: () => ipcRenderer.invoke('get-platform')
+    getPlatform: () => ipcRenderer.invoke('get-platform'),
+    checkFFmpeg: () => ipcRenderer.invoke('check-ffmpeg'),
+    openExternal: (url) => ipcRenderer.invoke('open-external', url),
+    adjustWindowSize: () => ipcRenderer.invoke('adjust-window-size')
 });

@@ -29,11 +29,10 @@ function checkFFmpeg() {
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 420,
-        height: 480,
-        minWidth: 380,
-        minHeight: 450,
-        maxWidth: 500,
+        width: 500,
+        height: 550,
+        minWidth: 450,
+        minHeight: 500,
         alwaysOnTop: true,
         resizable: true,
         webPreferences: {
@@ -69,21 +68,6 @@ function createWindow() {
     
     // Make sure window stays on top but not during capture
     mainWindow.setAlwaysOnTop(true, 'floating', 1);
-}
-
-// Function to adjust window size based on content
-function adjustWindowSize() {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    
-    try {
-        // Simple approach: just make the window more compact
-        const [currentWidth] = mainWindow.getSize();
-        const newHeight = 480; // Compact height
-        mainWindow.setSize(currentWidth, newHeight);
-        console.log(`Window resized to: ${currentWidth}x${newHeight}`);
-    } catch (err) {
-        console.log('Could not resize window:', err);
-    }
 }
 
 function createTray() {
@@ -456,18 +440,44 @@ ipcMain.handle('start-chrome-kiosk', async () => {
             detached: true,
             stdio: 'ignore'
         });
+        
+        // Trova il primo browser disponibile
+        for (const path of chromePaths) {
+            try {
+                if (fs.existsSync(path)) {
+                    chromePath = path;
+                    if (path.includes('msedge')) {
+                        browserName = 'Edge';
+                    }
+                    console.log(`Trovato ${browserName} in: ${path}`);
+                    break;
+                }
+            } catch (error) {
+                console.log(`Controllo percorso fallito: ${path}`);
+            }
+        }
+
+        if (!chromePath) {
+            return { success: false, message: 'Chrome/Edge not found. Install Google Chrome or use Microsoft Edge.' };
+        }
+
+        chromeProcess = spawn(chromePath, chromeArgs, {
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
 
         chromeProcess.on('error', (error) => {
-            console.error(`Errore ${browserCheck.name}:`, error);
+            console.error('Errore Chrome:', error);
             chromeProcess = null;
+            mainWindow.webContents.send('chrome-status', { active: false, error: error.message });
         });
 
         chromeProcess.on('close', (code) => {
-            console.log(`${browserCheck.name} terminato con codice ${code}`);
+            console.log(`Chrome terminato con codice ${code}`);
             chromeProcess = null;
+            mainWindow.webContents.send('chrome-status', { active: false });
         });
 
-        return { success: true, message: `${browserCheck.name} Kiosk started`, browserName: browserCheck.name };
+        return { success: true, message: `${browserName} Kiosk started` };
     } catch (error) {
         return { success: false, message: `Error: ${error.message}` };
     }
@@ -477,9 +487,9 @@ ipcMain.handle('exit-chrome-kiosk', async () => {
     if (chromeProcess) {
         chromeProcess.kill();
         chromeProcess = null;
-        return { success: true, message: 'Browser Kiosk terminated' };
+        return { success: true, message: 'Chrome Kiosk terminated' };
     }
-    return { success: false, message: 'Browser not running' };
+    return { success: false, message: 'Chrome not running' };
 });
 
 // Window visibility handlers
@@ -501,31 +511,8 @@ ipcMain.handle('show-window', async () => {
     }
 });
 
-// Window resize handler
-ipcMain.handle('adjust-window-size', async () => {
-    try {
-        adjustWindowSize();
-        return { success: true, message: 'Window resized' };
-    } catch (error) {
-        return { success: false, message: `Error: ${error.message}` };
-    }
-});
-
 ipcMain.handle('get-platform', async () => {
     return os.platform();
-});
-
-ipcMain.handle('check-ffmpeg', async () => {
-    return await checkFFmpeg();
-});
-
-ipcMain.handle('open-external', async (event, url) => {
-    try {
-        await shell.openExternal(url);
-        return { success: true };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
 });
 
 // Gestione errori non catturati
