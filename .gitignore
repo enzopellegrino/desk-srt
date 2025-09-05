@@ -137,6 +137,7 @@ config/local_settings.ini
 
 # Installer files
 # DeskSRT_Installer.exe  # Include installer in releases
+# DeskSRT_Setup.exe      # Include setup in releases
 installer_icon.ico
 header.bmp
 *.nsi.bak
