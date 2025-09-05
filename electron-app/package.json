@@ -1,7 +1,7 @@
 {
   "name": "desk-srt",
   "productName": "Desk SRT",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "main": "main.js",
   "description": "Screen Capture to SRT Streaming Application",
   "author": "Enzo Pellegrino",

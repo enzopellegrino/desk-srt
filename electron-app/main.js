@@ -13,27 +13,68 @@ let tray = null;
 // Check FFmpeg availability
 function checkFFmpeg() {
     return new Promise((resolve) => {
-        const command = os.platform() === 'win32' ? 'where ffmpeg' : 'which ffmpeg';
-        exec(command, (error, stdout, stderr) => {
-            if (error) {
-                console.log('❌ FFmpeg not found in PATH');
+        const platform = os.platform();
+        
+        if (platform === 'win32') {
+            // First try PATH command
+            exec('where ffmpeg', (error, stdout, stderr) => {
+                if (!error) {
+                    const ffmpegPath = stdout.trim();
+                    console.log(`✅ FFmpeg found in PATH: ${ffmpegPath}`);
+                    resolve({ available: true, path: ffmpegPath });
+                    return;
+                }
+                
+                // If not in PATH, check common installation locations
+                const commonPaths = [
+                    'C:\\ffmpeg\\bin\\ffmpeg.exe',
+                    'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
+                    'C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe',
+                    `${process.env.USERPROFILE}\\ffmpeg\\bin\\ffmpeg.exe`,
+                    `${process.env.LOCALAPPDATA}\\ffmpeg\\bin\\ffmpeg.exe`,
+                    `${process.env.PROGRAMFILES}\\ffmpeg\\bin\\ffmpeg.exe`,
+                    `${process.env['PROGRAMFILES(X86)']}\\ffmpeg\\bin\\ffmpeg.exe`,
+                    'C:\\tools\\ffmpeg\\bin\\ffmpeg.exe'
+                ];
+                
+                for (const path of commonPaths) {
+                    try {
+                        if (fs.existsSync(path)) {
+                            console.log(`✅ FFmpeg found at: ${path}`);
+                            resolve({ available: true, path: path });
+                            return;
+                        }
+                    } catch (err) {
+                        console.log(`❌ Error checking ${path}: ${err.message}`);
+                    }
+                }
+                
+                console.log('❌ FFmpeg not found in PATH or common locations');
                 resolve({ available: false, path: null });
-            } else {
-                const ffmpegPath = stdout.trim();
-                console.log(`✅ FFmpeg found: ${ffmpegPath}`);
-                resolve({ available: true, path: ffmpegPath });
-            }
-        });
+            });
+        } else {
+            // macOS/Linux - use which command
+            exec('which ffmpeg', (error, stdout, stderr) => {
+                if (error) {
+                    console.log('❌ FFmpeg not found in PATH');
+                    resolve({ available: false, path: null });
+                } else {
+                    const ffmpegPath = stdout.trim();
+                    console.log(`✅ FFmpeg found: ${ffmpegPath}`);
+                    resolve({ available: true, path: ffmpegPath });
+                }
+            });
+        }
     });
 }
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 420,
-        height: 480,
-        minWidth: 380,
-        minHeight: 450,
-        maxWidth: 500,
+        width: 480,
+        height: 580,
+        minWidth: 450,
+        minHeight: 550,
+        maxWidth: 600,
         alwaysOnTop: true,
         resizable: true,
         webPreferences: {
@@ -62,7 +103,7 @@ function createWindow() {
     const { width, height } = primaryDisplay.workAreaSize;
     
     // Position the window in the top-right corner, fully visible
-    const windowX = width - 520;  // Leave some margin from right edge
+    const windowX = width - 580;  // Leave some margin from right edge
     const windowY = 20;           // Small margin from top
     
     mainWindow.setPosition(windowX, windowY);
@@ -78,7 +119,7 @@ function adjustWindowSize() {
     try {
         // Simple approach: just make the window more compact
         const [currentWidth] = mainWindow.getSize();
-        const newHeight = 480; // Compact height
+        const newHeight = 580; // Increased height for better visibility
         mainWindow.setSize(currentWidth, newHeight);
         console.log(`Window resized to: ${currentWidth}x${newHeight}`);
     } catch (err) {
@@ -150,6 +191,26 @@ function registerGlobalShortcuts() {
         if (mainWindow.isVisible()) {
             mainWindow.hide();
         } else {
+            showMainWindow();
+        }
+    });
+    
+    // Emergency exit for Chrome kiosk: Ctrl+Shift+Escape
+    globalShortcut.register('CommandOrControl+Shift+Escape', () => {
+        if (chromeProcess) {
+            console.log('🚨 Emergency exit: Terminating Chrome kiosk');
+            chromeProcess.kill();
+            chromeProcess = null;
+            showMainWindow();
+        }
+    });
+    
+    // Alternative exit: Ctrl+Alt+Q 
+    globalShortcut.register('CommandOrControl+Alt+Q', () => {
+        if (chromeProcess) {
+            console.log('🚨 Alternative exit: Terminating Chrome kiosk');
+            chromeProcess.kill();
+            chromeProcess = null;
             showMainWindow();
         }
     });
@@ -447,7 +508,10 @@ ipcMain.handle('start-chrome-kiosk', async () => {
             '--disable-translate',
             '--disable-default-apps',
             '--disable-popup-blocking',
-            'about:blank'  // Pagina iniziale vuota
+            '--disable-extensions',
+            '--disable-plugins',
+            '--no-default-browser-check',
+            'https://example.com'  // Pagina di test semplice e veloce
         ];
 
         console.log(`🌐 Avvio ${browserCheck.name} kiosk: ${browserCheck.path}`);
@@ -467,7 +531,11 @@ ipcMain.handle('start-chrome-kiosk', async () => {
             chromeProcess = null;
         });
 
-        return { success: true, message: `${browserCheck.name} Kiosk started`, browserName: browserCheck.name };
+        return { 
+            success: true, 
+            message: `${browserCheck.name} Kiosk started\n\nEmergency Exit:\n• Ctrl+Shift+Esc - Force close kiosk\n• Ctrl+Alt+Q - Alternative exit\n• Use "Exit Kiosk" button in app`, 
+            browserName: browserCheck.name 
+        };
     } catch (error) {
         return { success: false, message: `Error: ${error.message}` };
     }

@@ -332,7 +332,10 @@
         
         <!-- FFmpeg Installation Helper (hidden by default) -->
         <div id="ffmpegHelper" style="display: none; margin-top: 10px;">
-            <button id="downloadFFmpegBtn" class="btn-chrome" onclick="openFFmpegDownload()" title="Open FFmpeg download page">📥 Download FFmpeg</button>
+            <div class="button-group">
+                <button id="downloadFFmpegBtn" class="btn-chrome" onclick="openFFmpegDownload()" title="Open FFmpeg download page">📥 Download FFmpeg</button>
+                <button id="recheckFFmpegBtn" class="btn-start" onclick="recheckFFmpeg()" title="Check if FFmpeg is now available">🔍 Recheck FFmpeg</button>
+            </div>
         </div>
         </div>
         
@@ -340,6 +343,8 @@
             <small>
                 🔥 <strong>Shortcuts:</strong><br>
                 Ctrl+Shift+D = Show/Hide Window<br>
+                Ctrl+Shift+Esc = Emergency Exit Kiosk<br>
+                Ctrl+Alt+Q = Alternative Exit Kiosk<br>
                 Right-click tray icon = Menu
             </small>
         </div>

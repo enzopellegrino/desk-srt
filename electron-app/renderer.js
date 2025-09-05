@@ -241,6 +241,35 @@ async function openFFmpegDownload() {
     }
 }
 
+// Function to recheck FFmpeg availability
+async function recheckFFmpeg() {
+    try {
+        updateStatus('🔍 Checking FFmpeg installation...', 'countdown');
+        const ffmpegCheck = await window.electronAPI.checkFFmpeg?.();
+        
+        if (ffmpegCheck?.available) {
+            updateStatus('✅ FFmpeg found! Ready to stream', 'stopped');
+            // Re-enable start button
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = false;
+            startBtn.textContent = '▶ Start Stream';
+            startBtn.title = 'Start streaming to SRT server';
+            
+            // Hide FFmpeg helper
+            const ffmpegHelper = document.getElementById('ffmpegHelper');
+            ffmpegHelper.style.display = 'none';
+            
+            // Adjust window size
+            adjustWindowSizeDelayed();
+        } else {
+            updateStatus('❌ FFmpeg still not found - Check installation guide', 'error');
+        }
+    } catch (error) {
+        console.error('FFmpeg recheck failed:', error);
+        updateStatus('⚠️ Could not check FFmpeg status', 'error');
+    }
+}
+
 // Listen for streaming status updates
 window.electronAPI.onStreamingStatus((event, status) => {
     if (status.streaming) {
@@ -278,7 +307,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             try {
                 const ffmpegCheck = await window.electronAPI.checkFFmpeg?.();
                 if (!ffmpegCheck?.available) {
-                    updateStatus('❌ FFmpeg not installed - Streaming unavailable', 'error');
+                    updateStatus('❌ FFmpeg not found in PATH or common locations', 'error');
                     // Disable start button until FFmpeg is installed
                     const startBtn = document.getElementById('startBtn');
                     startBtn.disabled = true;
@@ -291,7 +320,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                     
                     // Show installation instructions
                     setTimeout(() => {
-                        updateStatus('📥 Click button below to download FFmpeg', 'error');
+                        updateStatus('📥 Extract FFmpeg to C:\\ffmpeg\\bin\\ or add to PATH', 'error');
                         // Adjust window size after content change
                         adjustWindowSizeDelayed();
                     }, 3000);
