@@ -30,7 +30,12 @@
       "assets/**/*"
     ],
     "win": {
-      "target": "nsis",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        }
+      ],
       "artifactName": "${productName}_Setup_${version}.${ext}"
     },
     "nsis": {
