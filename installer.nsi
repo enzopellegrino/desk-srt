@@ -27,26 +27,25 @@ InstallDirRegKey HKLM "Software\DeskSRT" "InstallDir"
 RequestExecutionLevel admin
 
 ; Version Information
-VIVersionInfo /LANG=${LANG_ITALIAN} /CODEPAGE=1252
 VIProductVersion "1.0.0.0"
-VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "ProductName" "Desk SRT"
-VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "Comments" "Screen Capture to SRT Streaming"
-VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "CompanyName" "DeskSRT Project"
-VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "LegalCopyright" "© 2025 DeskSRT Project"
-VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "FileDescription" "Desk SRT Installer"
-VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "FileVersion" "1.0.0.0"
-VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "ProductVersion" "1.0.0.0"
+VIAddVersionKey "ProductName" "Desk SRT"
+VIAddVersionKey "Comments" "Screen Capture to SRT Streaming"
+VIAddVersionKey "CompanyName" "DeskSRT Project"
+VIAddVersionKey "LegalCopyright" "© 2025 DeskSRT Project"
+VIAddVersionKey "FileDescription" "Desk SRT Installer"
+VIAddVersionKey "FileVersion" "1.0.0.0"
+VIAddVersionKey "ProductVersion" "1.0.0.0"
 
 ;--------------------------------
 ; Interface Settings
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "installer_icon.ico"
-!define MUI_UNICON "installer_icon.ico"
+; !define MUI_ICON "installer_icon.ico"
+; !define MUI_UNICON "installer_icon.ico"
 
 ; Header image
 !define MUI_HEADERIMAGE
-!define MUI_HEADERIMAGE_BITMAP "header.bmp"
+; !define MUI_HEADERIMAGE_BITMAP "header.bmp"
 !define MUI_HEADERIMAGE_RIGHT
 
 ; Welcome page
@@ -78,7 +77,7 @@ VIAddVersionKey /LANG=${LANG_ITALIAN} /CODEPAGE=1252 "ProductVersion" "1.0.0.0"
 !insertmacro MUI_PAGE_DIRECTORY
 
 ; Custom page for Python installation check
-Page custom PythonCheckPage PythonCheckPageLeave
+; Page custom PythonCheckPage PythonCheckPageLeave
 
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -103,80 +102,9 @@ Var NeedsPython
 Var NeedsFFmpeg
 
 ;--------------------------------
-; Custom Python Check Page
-
-Function PythonCheckPage
-    !insertmacro MUI_HEADER_TEXT "Controllo Dipendenze" "Verifica della presenza di Python e FFmpeg"
-    
-    nsDialogs::Create 1018
-    Pop $0
-    
-    ${NSD_CreateLabel} 0 0 100% 20u "Controllo delle dipendenze necessarie per Desk SRT..."
-    Pop $0
-    
-    ; Check Python
-    ${NSD_CreateLabel} 0 30u 100% 15u "• Python 3.8+:"
-    Pop $0
-    
-    ClearErrors
-    ExecWait 'python --version' $1
-    ${If} ${Errors}
-    ${OrIf} $1 != 0
-        ${NSD_CreateLabel} 150u 30u 100% 15u "NON TROVATO (sarà installato)"
-        Pop $0
-        ${NSD_SetColor} $0 0xFF0000
-        StrCpy $NeedsPython "1"
-    ${Else}
-        nsExec::ExecToStack 'python --version'
-        Pop $1
-        Pop $PythonVersion
-        ${NSD_CreateLabel} 150u 30u 100% 15u "TROVATO ($PythonVersion)"
-        Pop $0
-        ${NSD_SetColor} $0 0x008000
-        StrCpy $NeedsPython "0"
-    ${EndIf}
-    
-    ; Check FFmpeg
-    ${NSD_CreateLabel} 0 50u 100% 15u "• FFmpeg con NVENC:"
-    Pop $0
-    
-    ClearErrors
-    ExecWait 'ffmpeg -version' $1
-    ${If} ${Errors}
-    ${OrIf} $1 != 0
-        ${NSD_CreateLabel} 150u 50u 100% 15u "NON TROVATO (sarà scaricato)"
-        Pop $0
-        ${NSD_SetColor} $0 0xFF0000
-        StrCpy $NeedsFFmpeg "1"
-    ${Else}
-        ${NSD_CreateLabel} 150u 50u 100% 15u "TROVATO"
-        Pop $0
-        ${NSD_SetColor} $0 0x008000
-        StrCpy $NeedsFFmpeg "0"
-    ${EndIf}
-    
-    ; GPU Check
-    ${NSD_CreateLabel} 0 70u 100% 15u "• GPU NVIDIA:"
-    Pop $0
-    
-    ClearErrors
-    ExecWait 'nvidia-smi --query-gpu=name --format=csv,noheader' $1
-    ${If} ${Errors}
-    ${OrIf} $1 != 0
-        ${NSD_CreateLabel} 150u 70u 100% 15u "NON RILEVATA"
-        Pop $0
-        ${NSD_SetColor} $0 0xFF8000
-    ${Else}
-        ${NSD_CreateLabel} 150u 70u 100% 15u "RILEVATA"
-        Pop $0
-        ${NSD_SetColor} $0 0x008000
-    ${EndIf}
-    
-    nsDialogs::Show
-FunctionEnd
-
-Function PythonCheckPageLeave
-FunctionEnd
+; Custom Python Check Page - Simplified for Mac NSIS compatibility
+; Function PythonCheckPage
+; Function PythonCheckPageLeave
 
 ;--------------------------------
 ; Installer Sections
@@ -267,21 +195,11 @@ Section "FFmpeg con NVENC" SecFFmpeg
         Pop $R0
         
         ${If} $R0 == "success"
-            DetailPrint "Estrazione FFmpeg..."
+            DetailPrint "FFmpeg scaricato. Estrai manualmente dopo l'installazione."
             
-            ; Extract FFmpeg
-            nsisunz::Unzip "$TEMP\ffmpeg.zip" "$TEMP\"
-            
-            ; Find and copy ffmpeg.exe
-            FindFirst $0 $1 "$TEMP\ffmpeg-master-latest-win64-gpl*"
-            ${If} $0 != ""
-                CopyFiles "$TEMP\$1\bin\ffmpeg.exe" "$INSTDIR\"
-                DetailPrint "FFmpeg installato in $INSTDIR"
-                
-                ; Cleanup
-                RMDir /r "$TEMP\$1"
-                FindClose $0
-            ${EndIf}
+            ; Copia il file zip nella directory di installazione per estrazione manuale
+            CopyFiles "$TEMP\ffmpeg.zip" "$INSTDIR\"
+            DetailPrint "ffmpeg.zip copiato in $INSTDIR per estrazione manuale"
             
             Delete "$TEMP\ffmpeg.zip"
         ${Else}

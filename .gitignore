@@ -136,7 +136,7 @@ ffmpeg/
 config/local_settings.ini
 
 # Installer files
-DeskSRT_Installer.exe
+# DeskSRT_Installer.exe  # Include installer in releases
 installer_icon.ico
 header.bmp
 *.nsi.bak
